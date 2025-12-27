@@ -86,9 +86,9 @@ class SpectrumAnalyzerGUI:
 
         # Acquisition period selection
         ttk.Label(control_frame, text="Acquisition Period:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
-        self.acq_period_var = tk.StringVar(value="1 s")
+        self.acq_period_var = tk.StringVar(value="5 s")
         acq_periods = [
-            "200 ms", "500 ms", "1 s", "2 s", "5 s", "10 s"
+            "1 s", "2 s", "5 s", "10 s", "20 s", "60 s"
         ]
         self.acq_period_combo = ttk.Combobox(control_frame, textvariable=self.acq_period_var,
                                              values=acq_periods, width=20, state='readonly')
@@ -97,7 +97,7 @@ class SpectrumAnalyzerGUI:
         # Reference frequency selection
         ttk.Label(control_frame, text="Reference Frequency (Hz):").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
         self.ref_freq_var = tk.StringVar(value="360")
-        ref_freqs = ["300", "360"]
+        ref_freqs = ["300", "360", "600", "720"]
         self.ref_freq_combo = ttk.Combobox(control_frame, textvariable=self.ref_freq_var,
                                            values=ref_freqs, width=20, state='readonly')
         self.ref_freq_combo.grid(row=3, column=1, sticky=tk.W, padx=5, pady=5)
@@ -173,7 +173,7 @@ class SpectrumAnalyzerGUI:
 
         # Set initial limits for spectrum
         self.ax_spectrum.set_xlim(10, 24000)
-        self.ax_spectrum.set_ylim(-120, 0)
+        self.ax_spectrum.set_ylim(-100, -20)
 
         # Configure timegrapher plot (linear)
         self.ax_time.set_xlabel('Time [s]')
