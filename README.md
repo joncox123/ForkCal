@@ -21,7 +21,7 @@ Only tested on Linux, but may run on other operating systems. I assume you are r
 ## Instructions
 Select the reference frequency for your movement, which is the frequency of the tuning fork. Early Accutrons run at 360 Hz, while the later ETA movements such as the Omega f300 run at 300 Hz.
 Also, for good accuracy, you should set the acquisition period to the longest duration possible, such as 10 seconds or more. 
-On some watches, the second harmonic of the oscillation frequnecy is actually stronger and clearer (higher SNR) than the fundamental mode. For example, on my Accutron 214, the signal at 2*360 Hz = 720 Hz is much strongeron the USB timegrapher. Therefore, I can get better accuracy and performance by selecting a reference frequency of 720 Hz instead of 360 Hz.
+On some watches, the second harmonic of the oscillation frequnecy is actually stronger and clearer (higher SNR) than the fundamental mode. For example, on my Accutron 214, the signal at 2*360 Hz = 720 Hz is much stronger on my cheap USB timegrapher. Therefore, I can get better accuracy and performance by selecting a reference frequency of 720 Hz instead of 360 Hz.
 
 ## Theory of Operation
 An audio signal is recorded for the acquisition period (e.g. 10 seconds). A spectrogram is displayed but is not part of the timegrapher calculation. Instead, the frequency estimate is performed by:
