@@ -33,5 +33,7 @@ An audio signal is recorded for the acquisition period (e.g. 10 seconds). A spec
 - Convert frequency deviation to error in seconds per day as: SPD = deltaF/f_ref * 24*60^2
 - A median filter of length 3 is applied to the timegrapher plot.
 
+The accuracy is determined by two factors, the acquisition period (longer the better) and the time stability of the crystal in the USB timegrapher. Even though the USB timegrapher is cheap, is still has at least a basic quartz crystal, probably around 20 ppm or 1.7 seconds per day (spd). It may be possible to improve this by soldering in an OCXO or higher quality TCXO. This is a future project. 
+
 ## Credits and License
 Developed by joncox123 using Claude AI. All rights reserved.
