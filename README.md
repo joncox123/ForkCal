@@ -1,6 +1,10 @@
 # ForkCal
 Tuning fork watch timegrapher for Bulova Accutron and ETA movements, such as Omega f300, etc.
 
+<p align="center">
+    <img src="screenshot.png" alt="Screenshot of ForkCal" width="600">
+</p>
+
 ## Hardware Requirements
 This timegrapher software is intended to be used with an *inexpensive* USB timegrapher such as these:
 - https://www.amazon.com/s?k=usb+timegrapher
