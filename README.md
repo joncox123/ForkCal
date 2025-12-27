@@ -7,4 +7,4 @@ pip install -r requirements.txt
 python3 forkcal.py
 
 ## Credits and License
-Developed by joncox123. All rights reserved.
+Developed by joncox123 using Claude AI. All rights reserved.
