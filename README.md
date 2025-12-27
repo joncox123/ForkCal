@@ -1,6 +1,9 @@
 # ForkCal
 Tuning fork watch timegrapher for Bulova Accutron and ETA movements, such as Omega f300, etc.
 
+# Requirements
+Only tested on Linux, but may run on other operating systems. I assume you are running a Debian-based OS like Ubuntu. To run on other distributions, simply install the required packages using your package manager.
+
 ## Installation and launch
 sudo apt-get install python3-pyaudio portaudio19-dev
 
