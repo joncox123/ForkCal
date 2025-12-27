@@ -18,5 +18,18 @@ Only tested on Linux, but may run on other operating systems. I assume you are r
 - pip install -r requirements.txt
 - python3 forkcal.py
 
+## Instructions
+Select the reference frequency for your movement, which is the frequency of the tuning fork. Early Accutrons run at 360 Hz, while the later ETA movements such as the Omega f300 run at 300 Hz. Also, for good accuracy, you should set the acquisition period to the maximum, which is 10 seconds. 
+
+## Theory of Operation
+An audio signal is recorded for the acquisition period (e.g. 10 seconds). A spectrogram is displayed but is not part of the timegrapher calculation. Instead, the frequency estimate is performed by:
+- Bandpass filters the recorded signal around the reference frequency using a high order FIR filter
+- Crop the filtered signal to ~15% to ~85% of the time duration.
+- Fit a sine wave of the form A*sin(2*pi*f_fit + phi) to the filtered and cropped signal.
+  - Residual fitting error in excess of 5% raises an error and the fit and measurement are discarded.
+- Compute the frequency deviation (error) between the fit and the reference frequency, deltaF = f_ref - f_fit
+- Convert frequency deviation to error in seconds per day as: SPD = deltaF/f_ref * 24*60^2
+- A median filter of length 3 is applied to the timegrapher plot.
+
 ## Credits and License
 Developed by joncox123 using Claude AI. All rights reserved.
