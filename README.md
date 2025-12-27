@@ -3,7 +3,9 @@ Tuning fork watch timegrapher for Bulova Accutron and ETA movements, such as Ome
 
 ## Installation and launch
 sudo apt-get install python3-pyaudio portaudio19-dev
+
 pip install -r requirements.txt
+
 python3 forkcal.py
 
 ## Credits and License
