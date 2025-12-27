@@ -363,7 +363,7 @@ class AudioAnalyzer:
             # Debug plot 1: Filter frequency response
             debug_data = {}
             if debug:
-                w, h = signal.freqz(fir_coeff, worN=2048, fs=self.sample_rate)
+                w, h = signal.freqz(fir_coeff, worN=16384, fs=self.sample_rate)
                 debug_data['filter_freq'] = w
                 debug_data['filter_h'] = h
                 debug_data['lowcut'] = lowcut
@@ -403,18 +403,20 @@ class AudioAnalyzer:
 
             # Perform curve fitting
             try:
-                from scipy.optimize import curve_fit
-
                 # Initial guess
                 p0 = [A_guess, f_guess, phi_guess]
 
                 # Fit the sine model directly to the cropped filtered signal
                 popt, pcov = curve_fit(sine_model, t_cropped, x_cropped, p0=p0,
-                                      bounds=([-np.inf, lowcut, -np.pi],
-                                              [np.inf, highcut, np.pi]))
+                                       method='lm',
+                                       ftol=1e-15,      # Tighter function tolerance
+                                       xtol=1e-15,      # Tighter parameter tolerance
+                                       gtol=1e-15)      # Tighter gradient tolerance
+
 
                 # Extract fitted parameters
                 A_fit, f_fit, phi_fit = popt
+                f_fit = np.abs(f_fit)
 
                 # The fitted frequency is the actual frequency (no baseband offset)
                 estimated_freq = f_fit
@@ -592,9 +594,9 @@ class AudioAnalyzer:
         """
         with self.lock:
             center_freq = self.reference_freq
-            bandwidth_percent = 0.03
-            lowcut = center_freq * (1 - bandwidth_percent / 2)
-            highcut = center_freq * (1 + bandwidth_percent / 2)
+            bandwidth_fraction = 0.003
+            lowcut = center_freq * (1 - bandwidth_fraction / 2)
+            highcut = center_freq * (1 + bandwidth_fraction / 2)
 
             # Check if we need to recompute filter
             if (self.fir_coeff is None or
@@ -603,7 +605,7 @@ class AudioAnalyzer:
                 # Design FIR bandpass filter (linear phase, symmetric transients)
                 # Filter length: longer = sharper transition, but more edge effects
                 # For 1s at 48kHz, use ~10% of length for filter
-                numtaps = min(int(signal_length * 0.2), 4*1001)
+                numtaps = np.min([signal_length // 10, 4800]) # min(int(signal_length * 0.4), 4*1001)
                 if numtaps % 2 == 0:  # Make odd for Type I filter (better for bandpass)
                     numtaps += 1
 

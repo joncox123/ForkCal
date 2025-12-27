@@ -55,6 +55,7 @@ class SpectrumAnalyzerGUI:
         self.debug_fig = None
         self.debug_canvas = None
         self.debug_enabled = False  # Track if debug plots are active
+        self.first_plot_after_start = False  # Track if this is first plot after acquisition starts
 
         # Create GUI elements
         self.create_controls()
@@ -86,7 +87,7 @@ class SpectrumAnalyzerGUI:
 
         # Acquisition period selection
         ttk.Label(control_frame, text="Acquisition Period:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
-        self.acq_period_var = tk.StringVar(value="5 s")
+        self.acq_period_var = tk.StringVar(value="1 s")
         acq_periods = [
             "1 s", "2 s", "5 s", "10 s", "20 s", "60 s"
         ]
@@ -96,7 +97,7 @@ class SpectrumAnalyzerGUI:
 
         # Reference frequency selection
         ttk.Label(control_frame, text="Reference Frequency (Hz):").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
-        self.ref_freq_var = tk.StringVar(value="360")
+        self.ref_freq_var = tk.StringVar(value="720")
         ref_freqs = ["300", "360", "600", "720"]
         self.ref_freq_combo = ttk.Combobox(control_frame, textvariable=self.ref_freq_var,
                                            values=ref_freqs, width=20, state='readonly')
@@ -346,6 +347,9 @@ class SpectrumAnalyzerGUI:
             self.acq_period_combo.config(state='disabled')
             self.ref_freq_combo.config(state='disabled')
 
+            # Set flag to configure xlims on first plot update
+            self.first_plot_after_start = True
+
             # Start update loop
             self.update_plot()
 
@@ -375,7 +379,7 @@ class SpectrumAnalyzerGUI:
         except Exception as e:
             self.status_var.set(f"Error stopping: {str(e)}")
 
-    def update_plot(self, N_moving_avg=3):
+    def update_plot(self, N_moving_avg=1):
         """Update the plot with new data"""
         if not self.is_running:
             return
@@ -417,7 +421,7 @@ class SpectrumAnalyzerGUI:
                     for j in range(N_moving_avg):
                         idx = (self.data_index - j) % 100
                         window_values.append(self.deviation_data_raw[idx])
-                    avg = np.median(window_values)
+                    avg = np.mean(window_values)
                     self.deviation_data[self.data_index] = avg
 
                     # Increment index (wrap around at 100)
@@ -493,9 +497,10 @@ class SpectrumAnalyzerGUI:
                     self.vline_center.set_xdata([center])
                     self.vline_center.set_alpha(0.6)
 
-                    # Set spectrum plot x-limits to zoom around reference frequency
+                    # Set spectrum plot x-limits only on first plot after acquisition starts
                     # Range: 0.4 * f_c to 2.5 * f_c
-                    self.ax_spectrum.set_xlim(0.4 * center, 2.5 * center)
+                    if self.first_plot_after_start:
+                        self.ax_spectrum.set_xlim(0.4 * center, 2.5 * center)
 
             # Check signal quality and update plot titles and status
             if self.analyzer:
@@ -610,9 +615,10 @@ class SpectrumAnalyzerGUI:
                 self.ax_filter.grid(True, alpha=0.3)
                 self.ax_filter.legend()
 
-                # Set x-limits to zoom around reference frequency
+                # Set x-limits only on first plot after acquisition starts
                 # Range: 0.4 * f_c to 2.5 * f_c
-                self.ax_filter.set_xlim(0.4 * center_freq, 2.5 * center_freq)
+                if self.first_plot_after_start:
+                    self.ax_filter.set_xlim(0.4 * center_freq, 2.5 * center_freq)
 
             # Plot 2: Filtered signal in time domain with fitted sine wave overlay
             if 'time' in debug_data and 'x_filtered' in debug_data:
@@ -654,6 +660,10 @@ class SpectrumAnalyzerGUI:
 
             self.debug_fig.tight_layout()
             self.debug_canvas.draw_idle()
+
+            # Reset flag after first plot update
+            if self.first_plot_after_start:
+                self.first_plot_after_start = False
 
         except Exception as e:
             print(f"Error updating debug plots: {e}")
