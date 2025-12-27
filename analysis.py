@@ -93,7 +93,7 @@ class AudioAnalyzer:
     Real-time audio analyzer using PyAudio and scipy.signal.welch
     """
 
-    def __init__(self, device_name, sample_rate, acquisition_period, num_averages, reference_freq=360.0):
+    def __init__(self, device_name, sample_rate, acquisition_period, num_averages, reference_freq=360.0, freq_estimation_method='sine_fit'):
         """
         Initialize the audio analyzer
 
@@ -109,12 +109,15 @@ class AudioAnalyzer:
             Number of spectra to average (moving average)
         reference_freq : float
             Reference frequency in Hz (default 360.0)
+        freq_estimation_method : str
+            Method for frequency estimation: 'sine_fit' or 'phase_fit' (default 'sine_fit')
         """
         self.device_name = device_name
         self.sample_rate = sample_rate
         self.acquisition_period = acquisition_period
         self.num_averages = num_averages
         self.reference_freq = reference_freq
+        self.freq_estimation_method = freq_estimation_method
 
         # Extract device index from device name string "index: name ..."
         self.device_index = int(device_name.split(':')[0])
@@ -336,6 +339,221 @@ class AudioAnalyzer:
             else:
                 return None, None
 
+    def sine_best_fit(self, x_cropped, t_cropped, center_freq, residual_threshold, debug_data, debug):
+        # Step 3: Fit a sine wave directly to the cropped filtered signal
+        # Model: A * sin(2*pi*f*t + phi)
+
+        # Define the sine model function
+        def sine_model(t, A, f, phi):
+            return A * np.sin(2 * np.pi * f * t + phi)
+
+        # Initial parameter guesses
+        # Amplitude: estimate from signal std
+        A_guess = np.std(x_cropped) * np.sqrt(2)
+        # Frequency: should be close to center_freq (360 Hz)
+        f_guess = center_freq
+        # Phase: estimate from first few samples
+        phi_guess = 0.0
+
+        # Perform curve fitting
+        try:
+            # Initial guess
+            p0 = [A_guess, f_guess, phi_guess]
+
+            # Fit the sine model directly to the cropped filtered signal
+            popt, pcov = curve_fit(sine_model, t_cropped, x_cropped, p0=p0,
+                                    method='lm',
+                                    ftol=1e-15,      # Tighter function tolerance
+                                    xtol=1e-15,      # Tighter parameter tolerance
+                                    gtol=1e-15)      # Tighter gradient tolerance
+
+
+            # Extract fitted parameters
+            A_fit, f_fit, phi_fit = popt
+            f_fit = np.abs(f_fit)
+
+            # The fitted frequency is the actual frequency (no baseband offset)
+            estimated_freq = f_fit
+
+            # Calculate deviation in seconds per day
+            # deviation (s/day) = (f_error / f_nominal) * 86400
+            freq_error = estimated_freq - self.reference_freq
+            deviation_spd = (freq_error / self.reference_freq) * 86400.0
+
+            # Generate fitted sine wave and compute residuals
+            fitted_signal = sine_model(t_cropped, A_fit, f_fit, phi_fit)
+            residuals = x_cropped - fitted_signal
+
+            # Check fit quality using RMS residual relative to signal amplitude
+            rms_residual = np.sqrt(np.mean(residuals**2))
+            signal_amplitude = A_fit
+
+            # Debug plot 3: Cropped signal and fitted sine wave
+            # ALWAYS update debug plots, even if fit is poor
+            if debug:
+                # Store debug data
+                debug_data['x_cropped_fit'] = x_cropped
+                debug_data['t_cropped_fit'] = t_cropped
+                debug_data['fitted_signal'] = fitted_signal
+                debug_data['residuals'] = residuals
+                debug_data['A_fit'] = A_fit
+                debug_data['f_fit'] = f_fit
+                debug_data['phi_fit'] = phi_fit
+                debug_data['estimated_freq'] = estimated_freq
+                debug_data['deviation_spd'] = deviation_spd
+                debug_data['fit_method'] = 'sine_fit'
+
+                # Put debug data in queue (non-blocking, discard if full)
+                try:
+                    self.debug_plot_queue.put_nowait(debug_data)
+                except queue.Full:
+                    # Queue is full, discard oldest and try again
+                    try:
+                        self.debug_plot_queue.get_nowait()
+                        self.debug_plot_queue.put_nowait(debug_data)
+                    except:
+                        pass  # If still fails, just skip this update
+
+            # Check fit quality and raise exception AFTER debug data is queued
+            # Threshold: RMS residual should be < threshold of signal amplitude
+            if signal_amplitude > 0:
+                relative_residual = rms_residual / signal_amplitude
+                if relative_residual > residual_threshold:
+                    raise PoorFitError(f"Poor fit quality: RMS residual {relative_residual:.2%} exceeds threshold {residual_threshold:.2%}")
+
+            # Update timegrapher data (only if fit quality is good)
+            with self.lock:
+                self.timegrapher_freq = estimated_freq
+                self.timegrapher_deviation = deviation_spd
+                self.signal_quality_good = True
+
+        except PoorFitError as pf_error:
+            # Poor fit detected - skip this update silently (or log if desired)
+            # Don't update timegrapher_freq or timegrapher_deviation
+            # This prevents the GUI from detecting "new" data
+            print(f"Skipping update: {pf_error}")
+            with self.lock:
+                self.signal_quality_good = False
+
+        except Exception as fit_error:
+            print(f"Curve fitting error: {fit_error}")
+
+    def instantaneous_phase_fit(self, x_cropped, t_cropped, center_freq, residual_threshold, debug_data, debug):
+        """
+        Estimate frequency using instantaneous phase from Hilbert transform
+
+        This method:
+        1. Computes the analytic signal using Hilbert transform
+        2. Extracts and unwraps the instantaneous phase
+        3. Fits a line to the unwrapped phase
+        4. Extracts instantaneous frequency from the slope
+
+        Parameters:
+        -----------
+        x_cropped : numpy array
+            Cropped filtered signal
+        t_cropped : numpy array
+            Time vector for cropped signal
+        center_freq : float
+            Center frequency of the bandpass filter
+        residual_threshold : float
+            Threshold for fit quality (normalized residual)
+        debug_data : dict
+            Dictionary to store debug plot data
+        debug : bool
+            Whether to store debug data
+        """
+        try:
+            # Compute analytic signal using Hilbert transform
+            analytic_signal = signal.hilbert(x_cropped)
+
+            # Extract instantaneous phase
+            instantaneous_phase = np.angle(analytic_signal)
+
+            # Unwrap phase to remove 2π discontinuities
+            unwrapped_phase = np.unwrap(instantaneous_phase)
+
+            # Fit a linear model to the unwrapped phase: φ(t) = 2πf*t + φ₀
+            # Using polyfit for robust linear regression
+            coeffs = np.polyfit(t_cropped, unwrapped_phase, 1)
+            slope = coeffs[0]  # This is 2πf
+            intercept = coeffs[1]  # This is φ₀
+
+            # Extract frequency from slope: f = slope / (2π)
+            estimated_freq = slope / (2 * np.pi)
+            estimated_freq = np.abs(estimated_freq)
+
+            # Calculate deviation in seconds per day
+            freq_error = estimated_freq - self.reference_freq
+            deviation_spd = (freq_error / self.reference_freq) * 86400.0
+
+            # Generate fitted phase line for quality assessment
+            fitted_phase = slope * t_cropped + intercept
+            phase_residuals = unwrapped_phase - fitted_phase
+
+            # Reconstruct signal from fitted phase for visualization
+            amplitude = np.max(np.abs(analytic_signal))
+            fitted_signal = amplitude * np.cos(fitted_phase)
+            signal_residuals = x_cropped - fitted_signal
+
+            # Check fit quality using RMS residual of phase fit
+            rms_phase_residual = np.sqrt(np.mean(phase_residuals**2))
+            phase_range = np.ptp(unwrapped_phase)  # Peak-to-peak range
+
+            # Also check signal reconstruction quality
+            rms_signal_residual = np.sqrt(np.mean(signal_residuals**2))
+            signal_amplitude = amplitude
+
+            # Store debug data (always, even if fit is poor)
+            if debug:
+                debug_data['x_cropped_fit'] = x_cropped
+                debug_data['t_cropped_fit'] = t_cropped
+                debug_data['fitted_signal'] = fitted_signal
+                debug_data['residuals'] = signal_residuals
+                debug_data['estimated_freq'] = estimated_freq
+                debug_data['deviation_spd'] = deviation_spd
+                # Phase-specific debug data
+                debug_data['unwrapped_phase'] = unwrapped_phase
+                debug_data['fitted_phase'] = fitted_phase
+                debug_data['phase_residuals'] = phase_residuals
+                debug_data['analytic_amplitude'] = np.abs(analytic_signal)
+                debug_data['instantaneous_freq'] = np.diff(unwrapped_phase) / (2 * np.pi * np.diff(t_cropped))
+                debug_data['fit_method'] = 'phase_fit'
+
+                # Put debug data in queue (non-blocking, discard if full)
+                try:
+                    self.debug_plot_queue.put_nowait(debug_data)
+                except queue.Full:
+                    # Queue is full, discard oldest and try again
+                    try:
+                        self.debug_plot_queue.get_nowait()
+                        self.debug_plot_queue.put_nowait(debug_data)
+                    except:
+                        pass  # If still fails, just skip this update
+
+            # Check fit quality using signal reconstruction
+            if signal_amplitude > 0:
+                relative_residual = rms_signal_residual / signal_amplitude
+                if relative_residual > residual_threshold:
+                    raise PoorFitError(f"Poor phase fit quality: RMS residual {relative_residual:.2%} exceeds threshold {residual_threshold:.2%}")
+
+            # Update timegrapher data (only if fit quality is good)
+            with self.lock:
+                self.timegrapher_freq = estimated_freq
+                self.timegrapher_deviation = deviation_spd
+                self.signal_quality_good = True
+
+        except PoorFitError as pf_error:
+            # Poor fit detected - skip this update
+            print(f"Skipping update: {pf_error}")
+            with self.lock:
+                self.signal_quality_good = False
+
+        except Exception as fit_error:
+            print(f"Phase fitting error: {fit_error}")
+            with self.lock:
+                self.signal_quality_good = False
+
     def _analyze_timegrapher(self, audio_data, residual_threshold=0.05):
         """
         Analyze timegrapher data using bandpass filter and sine fitting
@@ -386,102 +604,15 @@ class AudioAnalyzer:
                 debug_data['time_cropped'] = t_cropped
                 debug_data['x_cropped'] = x_cropped
 
-            # Step 3: Fit a sine wave directly to the cropped filtered signal
-            # Model: A * sin(2*pi*f*t + phi)
-
-            # Define the sine model function
-            def sine_model(t, A, f, phi):
-                return A * np.sin(2 * np.pi * f * t + phi)
-
-            # Initial parameter guesses
-            # Amplitude: estimate from signal std
-            A_guess = np.std(x_cropped) * np.sqrt(2)
-            # Frequency: should be close to center_freq (360 Hz)
-            f_guess = center_freq
-            # Phase: estimate from first few samples
-            phi_guess = 0.0
-
-            # Perform curve fitting
-            try:
-                # Initial guess
-                p0 = [A_guess, f_guess, phi_guess]
-
-                # Fit the sine model directly to the cropped filtered signal
-                popt, pcov = curve_fit(sine_model, t_cropped, x_cropped, p0=p0,
-                                       method='lm',
-                                       ftol=1e-15,      # Tighter function tolerance
-                                       xtol=1e-15,      # Tighter parameter tolerance
-                                       gtol=1e-15)      # Tighter gradient tolerance
-
-
-                # Extract fitted parameters
-                A_fit, f_fit, phi_fit = popt
-                f_fit = np.abs(f_fit)
-
-                # The fitted frequency is the actual frequency (no baseband offset)
-                estimated_freq = f_fit
-
-                # Calculate deviation in seconds per day
-                # deviation (s/day) = (f_error / f_nominal) * 86400
-                freq_error = estimated_freq - self.reference_freq
-                deviation_spd = (freq_error / self.reference_freq) * 86400.0
-
-                # Generate fitted sine wave and compute residuals
-                fitted_signal = sine_model(t_cropped, A_fit, f_fit, phi_fit)
-                residuals = x_cropped - fitted_signal
-
-                # Check fit quality using RMS residual relative to signal amplitude
-                rms_residual = np.sqrt(np.mean(residuals**2))
-                signal_amplitude = A_fit
-
-                # Debug plot 3: Cropped signal and fitted sine wave
-                # ALWAYS update debug plots, even if fit is poor
-                if debug:
-                    # Store debug data
-                    debug_data['x_cropped_fit'] = x_cropped
-                    debug_data['t_cropped_fit'] = t_cropped
-                    debug_data['fitted_signal'] = fitted_signal
-                    debug_data['residuals'] = residuals
-                    debug_data['A_fit'] = A_fit
-                    debug_data['f_fit'] = f_fit
-                    debug_data['phi_fit'] = phi_fit
-                    debug_data['estimated_freq'] = estimated_freq
-                    debug_data['deviation_spd'] = deviation_spd
-
-                    # Put debug data in queue (non-blocking, discard if full)
-                    try:
-                        self.debug_plot_queue.put_nowait(debug_data)
-                    except queue.Full:
-                        # Queue is full, discard oldest and try again
-                        try:
-                            self.debug_plot_queue.get_nowait()
-                            self.debug_plot_queue.put_nowait(debug_data)
-                        except:
-                            pass  # If still fails, just skip this update
-
-                # Check fit quality and raise exception AFTER debug data is queued
-                # Threshold: RMS residual should be < threshold of signal amplitude
-                if signal_amplitude > 0:
-                    relative_residual = rms_residual / signal_amplitude
-                    if relative_residual > residual_threshold:
-                        raise PoorFitError(f"Poor fit quality: RMS residual {relative_residual:.2%} exceeds threshold {residual_threshold:.2%}")
-
-                # Update timegrapher data (only if fit quality is good)
-                with self.lock:
-                    self.timegrapher_freq = estimated_freq
-                    self.timegrapher_deviation = deviation_spd
-                    self.signal_quality_good = True
-
-            except PoorFitError as pf_error:
-                # Poor fit detected - skip this update silently (or log if desired)
-                # Don't update timegrapher_freq or timegrapher_deviation
-                # This prevents the GUI from detecting "new" data
-                print(f"Skipping update: {pf_error}")
-                with self.lock:
-                    self.signal_quality_good = False
-
-            except Exception as fit_error:
-                print(f"Curve fitting error: {fit_error}")
+            # Select the appropriate frequency estimation routine based on user selection
+            if self.freq_estimation_method == 'sine_fit':
+                print("sine_best_fit", flush=True)
+                self.sine_best_fit(x_cropped, t_cropped, center_freq, residual_threshold, debug_data, debug)
+            elif self.freq_estimation_method == 'phase_fit':
+                print("instantaneous_phase_fit", flush=True)
+                self.instantaneous_phase_fit(x_cropped, t_cropped, center_freq, residual_threshold, debug_data, debug)
+            else:
+                print(f"Unknown frequency estimation method: {self.freq_estimation_method}")
 
         except Exception as e:
             print(f"Error in timegrapher analysis: {e}")
