@@ -438,7 +438,7 @@ class AudioAnalyzer:
         except Exception as fit_error:
             print(f"Curve fitting error: {fit_error}")
 
-    def instantaneous_phase_fit(self, x_cropped, t_cropped, center_freq, residual_threshold, debug_data, debug):
+    def instantaneous_phase_fit(self, x_cropped, t_cropped, center_freq, phase_residual_threshold, debug_data, debug):
         """
         Estimate frequency using instantaneous phase from Hilbert transform
 
@@ -456,8 +456,8 @@ class AudioAnalyzer:
             Time vector for cropped signal
         center_freq : float
             Center frequency of the bandpass filter
-        residual_threshold : float
-            Threshold for fit quality (normalized residual)
+        phase_residual_threshold : float
+            Threshold for phase fit quality (RMS residual in radians, default ~0.1 rad)
         debug_data : dict
             Dictionary to store debug plot data
         debug : bool
@@ -491,31 +491,31 @@ class AudioAnalyzer:
             fitted_phase = slope * t_cropped + intercept
             phase_residuals = unwrapped_phase - fitted_phase
 
-            # Reconstruct signal from fitted phase for visualization
-            amplitude = np.max(np.abs(analytic_signal))
-            fitted_signal = amplitude * np.cos(fitted_phase)
-            signal_residuals = x_cropped - fitted_signal
+            # Crop first and last 5% to avoid edge effects when computing quality metrics
+            # Edge effects can cause divergence in phase residuals for long acquisitions
+            n_samples = len(phase_residuals)
+            crop_start_idx = int(n_samples * 0.05)
+            crop_end_idx = int(n_samples * 0.95)
 
-            # Check fit quality using RMS residual of phase fit
-            rms_phase_residual = np.sqrt(np.mean(phase_residuals**2))
-            phase_range = np.ptp(unwrapped_phase)  # Peak-to-peak range
+            # Cropped residuals for quality assessment (avoid edge artifacts)
+            phase_residuals_cropped = phase_residuals[crop_start_idx:crop_end_idx]
+            t_cropped_residuals = t_cropped[crop_start_idx:crop_end_idx]
 
-            # Also check signal reconstruction quality
-            rms_signal_residual = np.sqrt(np.mean(signal_residuals**2))
-            signal_amplitude = amplitude
+            # Check fit quality using RMS residual of phase fit (on cropped data)
+            rms_phase_residual = np.sqrt(np.mean(phase_residuals_cropped**2))
 
             # Store debug data (always, even if fit is poor)
             if debug:
-                debug_data['x_cropped_fit'] = x_cropped
-                debug_data['t_cropped_fit'] = t_cropped
-                debug_data['fitted_signal'] = fitted_signal
-                debug_data['residuals'] = signal_residuals
+                # Note: For phase_fit, we don't store fitted_signal or signal residuals
+                # since we assess quality directly from phase residuals
                 debug_data['estimated_freq'] = estimated_freq
                 debug_data['deviation_spd'] = deviation_spd
-                # Phase-specific debug data
+                # Phase-specific debug data (use cropped residuals to avoid edge effects)
                 debug_data['unwrapped_phase'] = unwrapped_phase
                 debug_data['fitted_phase'] = fitted_phase
-                debug_data['phase_residuals'] = phase_residuals
+                debug_data['phase_residuals'] = phase_residuals_cropped  # Cropped to avoid edge effects
+                debug_data['phase_residuals_time'] = t_cropped_residuals  # Time vector for cropped residuals
+                debug_data['rms_phase_residual'] = rms_phase_residual  # For display in plots
                 debug_data['analytic_amplitude'] = np.abs(analytic_signal)
                 debug_data['instantaneous_freq'] = np.diff(unwrapped_phase) / (2 * np.pi * np.diff(t_cropped))
                 debug_data['fit_method'] = 'phase_fit'
@@ -531,11 +531,9 @@ class AudioAnalyzer:
                     except:
                         pass  # If still fails, just skip this update
 
-            # Check fit quality using signal reconstruction
-            if signal_amplitude > 0:
-                relative_residual = rms_signal_residual / signal_amplitude
-                if relative_residual > residual_threshold:
-                    raise PoorFitError(f"Poor phase fit quality: RMS residual {relative_residual:.2%} exceeds threshold {residual_threshold:.2%}")
+            # Check fit quality using phase residuals directly
+            if rms_phase_residual > phase_residual_threshold:
+                raise PoorFitError(f"Poor phase fit quality: RMS phase residual {rms_phase_residual:.6f} rad ({np.degrees(rms_phase_residual):.4f}°) exceeds threshold {phase_residual_threshold:.6f} rad ({np.degrees(phase_residual_threshold):.4f}°)")
 
             # Update timegrapher data (only if fit quality is good)
             with self.lock:
@@ -606,11 +604,11 @@ class AudioAnalyzer:
 
             # Select the appropriate frequency estimation routine based on user selection
             if self.freq_estimation_method == 'sine_fit':
-                print("sine_best_fit", flush=True)
                 self.sine_best_fit(x_cropped, t_cropped, center_freq, residual_threshold, debug_data, debug)
             elif self.freq_estimation_method == 'phase_fit':
-                print("instantaneous_phase_fit", flush=True)
-                self.instantaneous_phase_fit(x_cropped, t_cropped, center_freq, residual_threshold, debug_data, debug)
+                # For phase fit, use a phase residual threshold in radians (0.1 rad ~ 5.7 degrees)
+                phase_residual_threshold = 0.1  # radians
+                self.instantaneous_phase_fit(x_cropped, t_cropped, center_freq, phase_residual_threshold, debug_data, debug)
             else:
                 print(f"Unknown frequency estimation method: {self.freq_estimation_method}")
 

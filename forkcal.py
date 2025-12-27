@@ -87,7 +87,7 @@ class SpectrumAnalyzerGUI:
 
         # Acquisition period selection
         ttk.Label(control_frame, text="Acquisition Period:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
-        self.acq_period_var = tk.StringVar(value="250 ms")
+        self.acq_period_var = tk.StringVar(value="500 ms")
         acq_periods = [
             "250 ms", "500 ms", "1 s", "2 s", "5 s", "10 s", "20 s", "60 s"
         ]
@@ -455,29 +455,31 @@ class SpectrumAnalyzerGUI:
                     for group_idx in range(5):
                         start_idx = group_idx * 20
                         end_idx = start_idx + 20
-                        data = self.deviation_data[start_idx:end_idx]
-                        # ignore non-populated data
-                        if np.any(data == 0.0):
-                            group_avg = np.nan
+
+                        # Check raw data for invalid (zero) values
+                        raw_data = np.array(self.deviation_data_raw[start_idx:end_idx])
+                        # Only compute average if ALL raw data points are valid (non-zero)
+                        if np.any(raw_data == 0.0):
+                            # Group contains invalid data - hide annotation
+                            self.group_annotations[group_idx].set_visible(False)
                         else:
-                            group_avg = np.mean(data)
+                            # All data is valid - compute average from filtered data
+                            filtered_data = self.deviation_data[start_idx:end_idx]
+                            group_avg = np.mean(filtered_data)
 
-                        # Update annotation for this group
-                        # Position at center of group window, near top of plot
-                        center_time_idx = start_idx + 10
-                        x_pos = self.time_data[center_time_idx]
+                            # Update annotation for this group
+                            # Position at center of group window, near top of plot
+                            center_time_idx = start_idx + 10
+                            x_pos = self.time_data[center_time_idx]
 
-                        # Get current y-axis limits to position annotation near top
-                        y_min, y_max = self.ax_time.get_ylim()
-                        y_pos = y_max * 0.95  # 95% up from bottom
+                            # Get current y-axis limits to position annotation near top
+                            y_min, y_max = self.ax_time.get_ylim()
+                            y_pos = y_max * 0.95  # 95% up from bottom
 
-                        # Update annotation text and position
-                        if not np.isnan(group_avg):
+                            # Update annotation text and position
                             self.group_annotations[group_idx].set_text(f'{group_avg:.1f}')
                             self.group_annotations[group_idx].set_position((x_pos, y_pos))
                             self.group_annotations[group_idx].set_visible(True)
-                        else:
-                            self.group_annotations[group_idx].set_visible(False)
 
                     # Clear any existing trend line
                     self.line_trend.set_data([], [])
@@ -662,7 +664,9 @@ class SpectrumAnalyzerGUI:
                     self.ax_filter.set_xlim(0.4 * center_freq, 2.5 * center_freq)
 
             # Plot 2: Filtered signal in time domain with fitted sine wave overlay
-            if 'time' in debug_data and 'x_filtered' in debug_data:
+            # Only show this plot for sine_fit method; phase_fit doesn't reconstruct signal
+            fit_method = debug_data.get('fit_method', 'sine_fit')
+            if fit_method == 'sine_fit' and 'time' in debug_data and 'x_filtered' in debug_data:
                 t = debug_data['time']
                 x_filtered = debug_data['x_filtered']
 
@@ -674,47 +678,49 @@ class SpectrumAnalyzerGUI:
                     fitted_signal = debug_data['fitted_signal']
                     estimated_freq = debug_data.get('estimated_freq', 0)
                     deviation_spd = debug_data.get('deviation_spd', 0)
-                    fit_method = debug_data.get('fit_method', 'sine_fit')
+                    A_fit = debug_data.get('A_fit', 0)
+                    f_fit = debug_data.get('f_fit', 0)
+                    phi_fit = debug_data.get('phi_fit', 0)
 
                     self.ax_filtered.plot(t_crop, fitted_signal, 'r-.', linewidth=2, label='Fitted Signal')
 
-                    # Add parameter text box - content depends on fit method
-                    if fit_method == 'sine_fit':
-                        A_fit = debug_data.get('A_fit', 0)
-                        f_fit = debug_data.get('f_fit', 0)
-                        phi_fit = debug_data.get('phi_fit', 0)
-
-                        param_text = f'Sine Fit Parameters:\n'
-                        param_text += f'A = {A_fit:.6f}\n'
-                        param_text += f'f = {f_fit:.6f} Hz\n'
-                        param_text += f'φ = {phi_fit:.6f} rad ({np.degrees(phi_fit):.2f}°)\n'
-                        param_text += f'\nEstimated Frequency = {estimated_freq:.6f} Hz\n'
-                        param_text += f'Deviation = {deviation_spd:.3f} s/day'
-                    else:  # phase_fit
-                        param_text = f'Phase Fit Parameters:\n'
-                        param_text += f'Method: Instantaneous Phase\n'
-                        param_text += f'\nEstimated Frequency = {estimated_freq:.6f} Hz\n'
-                        param_text += f'Deviation = {deviation_spd:.3f} s/day'
+                    # Add parameter text box
+                    param_text = f'Sine Fit Parameters:\n'
+                    param_text += f'A = {A_fit:.6f}\n'
+                    param_text += f'f = {f_fit:.6f} Hz\n'
+                    param_text += f'φ = {phi_fit:.6f} rad ({np.degrees(phi_fit):.2f}°)\n'
+                    param_text += f'\nEstimated Frequency = {estimated_freq:.6f} Hz\n'
+                    param_text += f'Deviation = {deviation_spd:.3f} s/day'
 
                     self.ax_filtered.text(0.02, 0.98, param_text, transform=self.ax_filtered.transAxes,
                                          verticalalignment='top', fontfamily='monospace',
                                          bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
 
-                title = 'Bandpass Filtered Signal with Sine Fit' if debug_data.get('fit_method') == 'sine_fit' else 'Bandpass Filtered Signal with Phase Fit'
-                self.ax_filtered.set_title(title)
+                self.ax_filtered.set_title('Bandpass Filtered Signal with Sine Fit')
                 self.ax_filtered.set_xlabel('Time [s]')
                 self.ax_filtered.set_ylabel('Amplitude')
                 self.ax_filtered.grid(True, alpha=0.3)
                 self.ax_filtered.legend()
+            elif fit_method == 'phase_fit':
+                # For phase_fit method, show message that this plot is not applicable
+                self.ax_filtered.text(0.5, 0.5, 'Signal reconstruction not used\nfor Instantaneous Phase Fit method\n\nSee Phase Residuals plot below',
+                                     transform=self.ax_filtered.transAxes,
+                                     horizontalalignment='center', verticalalignment='center',
+                                     fontsize=12, style='italic', color='gray')
+                self.ax_filtered.set_title('Bandpass Filtered Signal')
+                self.ax_filtered.set_xlabel('Time [s]')
+                self.ax_filtered.set_ylabel('Amplitude')
+                self.ax_filtered.grid(True, alpha=0.3)
 
             # Plot 3: Phase residuals (only for phase_fit method)
             fit_method = debug_data.get('fit_method', 'sine_fit')
-            if fit_method == 'phase_fit' and 'phase_residuals' in debug_data and 't_cropped_fit' in debug_data:
-                t_crop = debug_data['t_cropped_fit']
+            if fit_method == 'phase_fit' and 'phase_residuals' in debug_data and 'phase_residuals_time' in debug_data:
+                # Use the cropped time vector for phase residuals (excludes first/last 5%)
+                t_residuals = debug_data['phase_residuals_time']
                 phase_residuals = debug_data['phase_residuals']
 
-                # Plot phase residuals
-                self.ax_phase.plot(t_crop, phase_residuals, 'r-', linewidth=1.0, label='Phase Residuals')
+                # Plot phase residuals (cropped to avoid edge effects)
+                self.ax_phase.plot(t_residuals, phase_residuals, 'r-', linewidth=1.0, label='Phase Residuals (cropped)')
                 self.ax_phase.axhline(0, color='k', linestyle='--', linewidth=0.8, alpha=0.5)
 
                 # Calculate RMS of residuals for display
@@ -723,14 +729,15 @@ class SpectrumAnalyzerGUI:
                 # Add statistics text box
                 stats_text = f'Phase Fit Quality:\n'
                 stats_text += f'RMS Residual = {rms_residual:.6f} rad\n'
-                stats_text += f'RMS Residual = {np.degrees(rms_residual):.4f}°'
+                stats_text += f'RMS Residual = {np.degrees(rms_residual):.4f}°\n'
+                stats_text += f'(Edge 5% excluded)'
 
                 self.ax_phase.text(0.98, 0.98, stats_text, transform=self.ax_phase.transAxes,
                                   verticalalignment='top', horizontalalignment='right',
                                   fontfamily='monospace',
                                   bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.8))
 
-                self.ax_phase.set_title('Phase Fit Residuals (Unwrapped Phase - Linear Fit)')
+                self.ax_phase.set_title('Phase Fit Residuals (Unwrapped Phase - Linear Fit, Center 90%)')
                 self.ax_phase.set_xlabel('Time [s]')
                 self.ax_phase.set_ylabel('Phase Residual [rad]')
                 self.ax_phase.grid(True, alpha=0.3)
