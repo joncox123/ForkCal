@@ -441,15 +441,25 @@ class SpectrumAnalyzerGUI:
                     window_values = []
                     for j in range(N_moving_avg):
                         idx = (self.data_index - j) % 100
-                        window_values.append(self.deviation_data_raw[idx])
+                        if self.deviation_data_raw[idx] != 0.0:
+                            window_values.append(self.deviation_data_raw[idx])
                     avg = np.mean(window_values)
                     self.deviation_data[self.data_index] = avg
 
                     # Increment index (wrap around at 100)
                     self.data_index = (self.data_index + 1) % 100
 
-                    # Update timegrapher scatter plot
-                    self.line_time.set_offsets(np.column_stack((self.time_data, self.deviation_data)))
+                    # Update timegrapher scatter plot (only plot valid non-zero data)
+                    # Filter out points where raw data is zero (invalid/unpopulated)
+                    raw_data_array = np.array(self.deviation_data_raw)
+                    valid_mask = raw_data_array != 0.0
+                    time_data_array = np.array(self.time_data)
+                    deviation_data_array = np.array(self.deviation_data)
+
+                    # Only plot points with valid raw data
+                    valid_times = time_data_array[valid_mask]
+                    valid_deviations = deviation_data_array[valid_mask]
+                    self.line_time.set_offsets(np.column_stack((valid_times, valid_deviations)))
 
                     # Compute averages for 5 groups of 20 points each
                     for group_idx in range(5):
