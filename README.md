@@ -33,6 +33,9 @@ An audio signal is recorded for the acquisition period (e.g. 250 ms). A spectrog
   - The purpose of the Hilbert transform is to provide a complex signal where the real part is the original signal and the imaginary part is phase shifted by 90 degrees. This I and Q signal (in-phase and quadrature) signal allows us to determine the angle (e.g. arctan2) without ambiguity.
 - Compute the angle on the analytic signal and then unwrap the phase
 - Fit a line to the unwrapped phase of form φ(t) = 2πf*t + φ₀. The slope, f, is the instantaneous frequency estimate.
+- Compute the frequency deviation (error) between the fit and the reference frequency, deltaF = f_ref - f_fit
+- Convert frequency deviation to error in seconds per day as: SPD = deltaF/f_ref * 24*60^2
+- A moving average filter of length 10 is applied to the timegrapher plot.
 
 ### Sine best fit
 - Bandpass filters the recorded signal around the reference frequency using a high order FIR filter
@@ -41,7 +44,7 @@ An audio signal is recorded for the acquisition period (e.g. 250 ms). A spectrog
   - Residual fitting error in excess of 5% raises an error and the fit and measurement are discarded.
 - Compute the frequency deviation (error) between the fit and the reference frequency, deltaF = f_ref - f_fit
 - Convert frequency deviation to error in seconds per day as: SPD = deltaF/f_ref * 24*60^2
-- A median filter of length 3 is applied to the timegrapher plot.
+- A moving average filter of length 10 is applied to the timegrapher plot.
 
 The accuracy is determined by three factors, the acquisition period (longer the better), the signal to noise ratio (SNR) of the recording circuit and the time stability of the crystal in the USB timegrapher. Even though the USB timegrapher is cheap, is still has at least a basic quartz crystal, probably around 20 ppm or 1.7 seconds per day (spd). It may be possible to improve this by soldering in an OCXO or higher quality TCXO. This is a future project. 
 
