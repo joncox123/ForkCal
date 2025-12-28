@@ -20,11 +20,21 @@ Only tested on Linux, but may run on other operating systems. I assume you are r
 
 ## Instructions
 Select the reference frequency for your movement, which is the frequency of the tuning fork. Early Accutrons run at 360 Hz, while the later ETA movements such as the Omega f300 run at 300 Hz.
-Also, for good accuracy, you should set the acquisition period to the longest duration possible, such as 10 seconds or more. 
+Also, for good accuracy, you should set the acquisition period to the longest duration possible, such as 1 second or more. 
 On some watches, the second harmonic of the oscillation frequnecy is actually stronger and clearer (higher SNR) than the fundamental mode. For example, on my Accutron 214, the signal at 2*360 Hz = 720 Hz is much stronger on my cheap USB timegrapher. Therefore, I can get better accuracy and performance by selecting a reference frequency of 720 Hz instead of 360 Hz.
 
 ## Theory of Operation
-An audio signal is recorded for the acquisition period (e.g. 10 seconds). A spectrogram is displayed but is not part of the timegrapher calculation. Instead, the frequency estimate is performed by:
+An audio signal is recorded for the acquisition period (e.g. 250 ms). A spectrogram is displayed but is not part of the timegrapher calculation. Instead, the frequency estimate is performed by:
+
+### Instantaneous frequency estimation (preferred)
+- Bandpass filters the recorded signal around the reference frequency using a high order FIR filter
+- Crop the filtered signal to ~15% to ~85% of the time duration.
+- Compute Hilbert transform on the filtered and cropped signal to yield the complex "analytic signal"
+  - The purpose of the Hilbert transform is to provide a complex signal where the real part is the original signal and the imaginary part is phase shifted by 90 degrees. This I and Q signal (in-phase and quadrature) signal allows us to determine the angle (e.g. arctan2) without ambiguity.
+- Compute the angle on the analytic signal and then unwrap the phase
+- Fit a line to the unwrapped phase of form φ(t) = 2πf*t + φ₀. The slope, f, is the instantaneous frequency estimate.
+
+### Sine best fit
 - Bandpass filters the recorded signal around the reference frequency using a high order FIR filter
 - Crop the filtered signal to ~15% to ~85% of the time duration.
 - Fit a sine wave of the form A*sin(2*pi*f_fit + phi) to the filtered and cropped signal.
