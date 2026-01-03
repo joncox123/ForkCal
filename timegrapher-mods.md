@@ -18,14 +18,14 @@ The timing performance is determined by the following factors:
 The stock crystal is a non-temperature compensated, 12.0 MHz oscillator with +/-50 ppm accuracy. To convert this to an equivalent error in seconds per day (spd), use the following formula:
 spd = PPM * 1e-6 * 24*60^2, which is simply the fractional error multiplied by the number of seconds in a day. Thus, the error range with a 50 ppm crystal can be +/-4.3 spd! This is hardly good enough for a tuning fork watch, let alone COSC level regulation of a mechanical watch.
 
-Fortunately, it is a relatively simple matter to replace the crystal with a much more accurate, temperature compensated crystal, known as a [Temperature Compensated Crystal Oscillator (TCXO)](https://en.wikipedia.org/wiki/Crystal_oscillator#Temperature). The circuit in the USB timegrapher runs at 5.0 V, but there are no TCXOs available that are related to 5 VDC. The highest available is only 3.6V.
+Fortunately, it is a relatively simple matter to replace the crystal with a much more accurate, temperature compensated crystal, known as a [Temperature Compensated Crystal Oscillator (TCXO)](https://en.wikipedia.org/wiki/Crystal_oscillator#Temperature). The circuit in the USB timegrapher runs at 5.0 V, but there are no TCXOs available that are rated to 5 VDC. The highest available is only 3.6V.
 However, to reliably drive the 5V logic of the microcontroller on the board, we can regulate the 5.0V supply down to 4.0V, which is close enough to provide both reliable and stable operation.
 Then we can simply swap the 50 ppm crystal with another crystal that is identical in size and pinout, but only 2.5 ppm with temperature compensation.
 
 ### Lowering the Background Noise
 One obvious design flaw in the USB timegrapher is the design and layout of the LED driver circuit, which flashes the LED when it is recording.
 The abrupt current pulses cause noise impulses on the audio input at roughly once per second. The easy solution is to desolder and remove the LED.
-Fortunately, the LED really isn't necessary because both Windows and Linux indicate the attached microphones and show when they are recording--so the LED is pointless anyway.
+Fortunately, the LED really isn't necessary because both Windows and Linux indicate the attached microphones and show when they are recording.
 
 However, acoustic background noise is also an issue due to the cheap plastic case without any sound proofing. Moreover, the top of the case, where the spring-loaded clamp slides back and forth, is completely exposed and unsealed--unlike a professional timegrapher.
 As a result, any noise from the environment can propagate inside and strike the piezo disc, coupling into the audio signal measurement. A good solution is to stuff soft fiberglass insulation into the case to dampen sound.
@@ -42,7 +42,7 @@ You will need to order two parts, a 2.5 ppm TCXO and a 4.0 V linear regulator. P
 
 First, open the bottom of the case by removing the three small screws under the padded, stick-on feet.
 Then free the circuit board (PCB) by removing the two small screws holding it to the plastic standoffs.
-**Be carefully not to pull too hard or you will break the wires connecting the piezo disc to the PCB!**
+**Be careful not to pull too hard or you will break the wires connecting the piezo disc to the PCB!**
 Carefully desolder the black and red piezo leads from the PCB and remove the board.
 
 Second, use a soldering iron to desolder and remove the LED (the clear plastic "bulb" near the USB-C connector) by heating the two leads from the underside and rocking it out.
@@ -53,10 +53,12 @@ Second, use a soldering iron to desolder and remove the LED (the clear plastic "
 
 Third, using a reflow soldering station with hot air gun for surface-mount electronics, heat up the existing crystal and carefully remove it with tweezers.
 You want to do this quickly, within a couple of minutes, to avoid damage.
-I recommend setting the heating plate to 225 °C from the bottom and then use hot air at 400 °C from the top, directly right above the crystal with a small nozel.
+I recommend setting the heating plate to 225 °C from the bottom and then use hot air at 400 °C from the top, directly above the crystal with a small nozel.
 
 Fourth, once you have removed the crystal, use a sharp [X-acto knife](https://en.wikipedia.org/wiki/X-Acto) or similar to *carefully* scrape off just the green solder resist, exposing the bare coper below.
-It helps to have a microscope, but it is not required. Then, clean the copper with some alcohol and "tin" the surface with a soldering iron and solder to protect it from oxidation.
+Also cut the 5V trace on the PCB to separate the 5V input from the 4V output that will drive the new crystal.
+It helps to have a microscope, but it is not required.
+Then, clean the copper with some alcohol and "tin" the surface with a soldering iron and solder to protect it from oxidation.
 
 <p align="center">
     <img src="pics/usb-timegrapher-trace-preparation.jpg" alt="Crystal removed and pads prepaired" width="600">
