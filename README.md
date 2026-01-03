@@ -2,13 +2,18 @@
 Tuning fork watch timegrapher for Bulova Accutron and ETA movements, such as Omega f300, etc.
 
 <p align="center">
-    <img src="screenshot.png" alt="Screenshot of ForkCal" width="600">
+    <img src="pics/screenshot.png" alt="Screenshot of ForkCal" width="600">
 </p>
 
 ## Hardware Requirements
-This timegrapher software is intended to be used with an *inexpensive* USB timegrapher such as these:
+This timegrapher software is intended to be used with an *inexpensive* USB timegrapher such as those available on Amazon, AliExpress and eBay. While the performance out of the box is not terrible, there are [**a few mods that should be done to dramatically improve the performance**](timegrapher-mods.md) to meet or exceed that of a professional commercial timegrapher.
 - https://www.amazon.com/s?k=usb+timegrapher
 - https://www.aliexpress.us/w/wholesale-usb-timegrapher.html
+- https://www.ebay.com/sch/i.html?_nkw=usb+timegrapher
+
+<p align="center">
+    <img src="pics/usb-timegrapher-accutron-214.jpg" alt="USB Timegrapher with Accutron 214 watch" width="600">
+</p>
 
 ## Software Requirements
 Only tested on Linux, but may run on other operating systems. I assume you are running a Debian-based OS like Ubuntu. To run on other distributions, simply install the required packages using your package manager.
