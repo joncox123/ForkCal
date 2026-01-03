@@ -47,7 +47,7 @@ An audio signal is recorded for the acquisition period (e.g. 250 ms). A spectrog
 ### Sine best fit
 - Bandpass filters the recorded signal around the reference frequency using a high order FIR filter
 - Crop the filtered signal to ~15% to ~85% of the time duration.
-- Fit a sine wave of the form A*sin(2*pi*f_fit + phi) to the filtered and cropped signal.
+- Fit a sine wave of the form Asin(2*pi*f_fit + phi) to the filtered and cropped signal.
   - Residual fitting error in excess of 5% raises an error and the fit and measurement are discarded.
 - Compute the frequency deviation (error) between the fit and the reference frequency, deltaF = f_ref - f_fit
 - Convert frequency deviation to error in seconds per day as: SPD = deltaF/f_ref * 24*60^2
