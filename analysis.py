@@ -14,6 +14,9 @@ from scipy.optimize import curve_fit
 from collections import deque
 import threading
 import queue
+import sys
+import os
+from contextlib import contextmanager
 
 
 class PoorFitError(Exception):
@@ -21,22 +24,62 @@ class PoorFitError(Exception):
     pass
 
 
+@contextmanager
+def suppress_alsa_errors():
+    """Context manager to suppress ALSA error messages to stderr"""
+    # Save original stderr
+    stderr_fileno = sys.stderr.fileno()
+    stderr_save = os.dup(stderr_fileno)
+
+    # Redirect stderr to /dev/null
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, stderr_fileno)
+    os.close(devnull)
+
+    try:
+        yield
+    finally:
+        # Restore original stderr
+        os.dup2(stderr_save, stderr_fileno)
+        os.close(stderr_save)
+
+
 def get_audio_devices():
     """
     Get list of available audio input devices
     Returns list of strings with device names
     """
-    p = pyaudio.PyAudio()
+    print("\n=== Audio Device Enumeration ===")
+
+    # Suppress ALSA errors during enumeration
+    with suppress_alsa_errors():
+        p = pyaudio.PyAudio()
+
     devices = []
 
     for i in range(p.get_device_count()):
-        info = p.get_device_info_by_index(i)
-        # Only add input devices (with input channels > 0)
-        if info['maxInputChannels'] > 0:
-            device_str = f"{i}: {info['name']} ({info['maxInputChannels']} ch, {int(info['defaultSampleRate'])} Hz)"
-            devices.append(device_str)
+        try:
+            info = p.get_device_info_by_index(i)
+            print(f"\nDevice {i}: {info['name']}")
+            print(f"  Max Input Channels: {info['maxInputChannels']}")
+            print(f"  Max Output Channels: {info['maxOutputChannels']}")
+            print(f"  Default Sample Rate: {info['defaultSampleRate']} Hz")
+            print(f"  Host API: {info['hostApi']}")
+
+            # Only add input devices (with input channels > 0)
+            if info['maxInputChannels'] > 0:
+                device_str = f"{i}: {info['name']} ({info['maxInputChannels']} ch, {int(info['defaultSampleRate'])} Hz)"
+                devices.append(device_str)
+                print(f"  ✓ Added to device list")
+            else:
+                print(f"  ✗ Skipped (no input channels)")
+
+        except Exception as e:
+            print(f"\nDevice {i}: ERROR querying device - {e}")
+            print(f"  ✗ Skipped due to error")
 
     p.terminate()
+    print(f"\n=== Found {len(devices)} input device(s) ===\n")
     return devices
 
 
