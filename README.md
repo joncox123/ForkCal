@@ -6,9 +6,10 @@ Tuning fork watch timegrapher for Bulova Accutron and ETA movements, such as Ome
 </p>
 
 ## Hardware Requirements
-This timegrapher software is intended to be used with an *inexpensive* USB timegrapher such as these:
+This timegrapher software is intended to be used with an *inexpensive* USB timegrapher such as those available on Amazon, AliExpress and eBay. While the performance out of the box is not terrible, there are [**a few mods that should be done to dramatically improve the performance**](timegrapher-mods.md) to meet or exceed that of a professional commercial timegrapher.
 - https://www.amazon.com/s?k=usb+timegrapher
 - https://www.aliexpress.us/w/wholesale-usb-timegrapher.html
+- https://www.ebay.com/sch/i.html?_nkw=usb+timegrapher
 
 <p align="center">
     <img src="pics/usb-timegrapher-accutron-214.jpg" alt="USB Timegrapher with Accutron 214 watch" width="600">
