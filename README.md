@@ -1,6 +1,8 @@
 # ForkCal
 Tuning fork watch timegrapher for Bulova Accutron and ETA movements, such as Omega f300, etc.
 
+[![Buy Me A Coffee](https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&slug=joncox&button_colour=FFDD00&font_colour=000000&font_family=Inter&outline_colour=000000&coffee_colour=ffffff)](https://www.buymeacoffee.com/joncox)
+
 <p align="center">
     <img src="pics/screenshot.png" alt="Screenshot of ForkCal" width="600">
 </p>
